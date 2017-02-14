@@ -13,14 +13,17 @@ class Calib_gauges():
         self.initial_weight = rospy.get_param('~initial_weight')
         self.incremental_weight = rospy.get_param('~incremental_weight')
         self.final_weight = rospy.get_param('~final_weight')
-        self.motor_id = 0
+        self.motor_id = ""
         self.number_of_tests = (self.final_weight-self.initial_weight)/self.incremental_weight
         self.strain_gauges_id = 0
         self.measurement = []
+        self.measurement_gauge_0 = []
+        self.measurement_gauge_1 = []
         self.headline_0 = []
         self.temp_0 = []
         self.headline_1 = []
         self.temp_1 = []
+        self.sub = rospy.Subscriber("/diagnostics_agg", DiagnosticArray, self.data_callback)
 
     def data_callback(self, data):
 
@@ -38,18 +41,15 @@ class Calib_gauges():
             for index, motor_id in fields.items():
 
                 if fields.get((index[0], 'Motor ID')) == "%s" % self.motor_id:
-                    if self.strain_gauges_id == 0:
-                        # store measurement in array
-                        self.measurement.append(fields.get((index[0], 'Strain Gauge Left')))
-                    else:
-                        # store measurement in array
-                        self.measurement.append(fields.get((index[0], 'Strain Gauge Right')))
+                    # store measurement in array
+                    self.measurement_gauge_0.append(fields.get((index[0], 'Strain Gauge Left')))
+                    self.measurement_gauge_1.append(fields.get((index[0], 'Strain Gauge Right')))
 
     def run_test(self):
 
         self.motor_id = raw_input("insert motor id: ")
 
-        for self.strain_gauges_id in range(0, 2):
+        for strain_gauges_id in range(0, 2):
 
             self.initial_weight = 0
 
@@ -57,17 +57,18 @@ class Calib_gauges():
 
                 self.initial_weight += self.incremental_weight
 
-                print("Apply %s g to strain_gauges %s" % (self.initial_weight, self.strain_gauges_id))
+                print("Apply %s g to strain_gauges %s" % (self.initial_weight, strain_gauges_id))
                 raw_input("Press enter when you are done...")
 
-                # Subscribe diagnostic topic to collect data
-                self.sub = rospy.Subscriber("/diagnostics_agg", DiagnosticArray, self.data_callback)
                 print("Measuring...")
 
-                rospy.sleep(5.0)  # give time to collect measurements
-                self.sub.unregister()  # stop subscribing topic
+                if strain_gauges_id == 0:
+                    self.measurement = self.measurement_gauge_0[-10:]
 
-                self.update_csv_file(self.measurement, self.strain_gauges_id)  # write measurements into csv file
+                elif strain_gauges_id == 1:
+                    self.measurement = self.measurement_gauge_1[-10:]
+
+                self.update_csv_file(self.measurement, strain_gauges_id)  # write measurements into csv file
                 self.measurement = []  # empty measurement array
 
     def update_csv_file(self, measurement, strain_gauges_id):
